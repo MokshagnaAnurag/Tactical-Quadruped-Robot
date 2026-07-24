@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 '''
-Copyright (c) 2019-2020, Juan Miguel Jimeno
+Copyright (c) 2026, Moksh
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
