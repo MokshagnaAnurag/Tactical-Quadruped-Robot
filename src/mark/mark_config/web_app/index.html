@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HERMES Robot - Ka-Chow Control Center</title>
+    <meta name="description" content="Lightning McQueen themed robot control dashboard for HERMES quadruped robot">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Racing+Sans+One&family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+    <script src="https://code.createjs.com/1.0.0/easeljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ros2d@0.10.0/build/ros2d.min.js"></script>
+</head>
+<body>
+    <!-- Background racing stripes -->
+    <div class="bg-stripes"></div>
+    <div class="speed-lines" id="speedLines"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-number">95</div>
+            <div class="header-center">
+                <h1 class="title">HERMES</h1>
+                <p class="subtitle">QUADRUPED CONTROL CENTER</p>
+                <div class="connection-bar">
+                    <div class="conn-dot" id="connDot"></div>
+                    <span id="statusText">CONNECTING...</span>
+                </div>
+            </div>
+            <div class="header-flame">
+                <div class="flame"></div>
+            </div>
+        </header>
+
+        <!-- Main Grid -->
+        <main class="main-grid">
+
+            <!-- STATUS TILES ROW -->
+            <section class="tiles-row">
+                <div class="tile tile-speed">
+                    <div class="tile-icon">⚡</div>
+                    <div class="tile-value" id="linearSpeed">0.00</div>
+                    <div class="tile-label">LINEAR m/s</div>
+                    <div class="tile-bar"><div class="tile-bar-fill" id="linearBar"></div></div>
+                </div>
+                <div class="tile tile-turn">
+                    <div class="tile-icon">🔄</div>
+                    <div class="tile-value" id="angularSpeed">0.00</div>
+                    <div class="tile-label">ANGULAR rad/s</div>
+                    <div class="tile-bar"><div class="tile-bar-fill" id="angularBar"></div></div>
+                </div>
+                <div class="tile tile-mode">
+                    <div class="tile-icon">🏁</div>
+                    <div class="tile-value" id="raceMode">IDLE</div>
+                    <div class="tile-label">RACE MODE</div>
+                </div>
+                <div class="tile tile-uptime">
+                    <div class="tile-icon">⏱</div>
+                    <div class="tile-value" id="uptimeVal">00:00</div>
+                    <div class="tile-label">UPTIME</div>
+                </div>
+            </section>
+
+            <!-- DRIVE CONTROLS -->
+            <section class="drive-section card">
+                <h2 class="card-title">DRIVE CONTROLS</h2>
+                <div class="drive-layout">
+                    <div class="dpad-container">
+                        <div class="dpad">
+                            <button class="dpad-btn dpad-up" id="btnFwd" onmousedown="startMove(0.5,0)" onmouseup="stopMove()" ontouchstart="startMove(0.5,0)" ontouchend="stopMove()">▲</button>
+                            <button class="dpad-btn dpad-left" id="btnLeft" onmousedown="startMove(0,1.0)" onmouseup="stopMove()" ontouchstart="startMove(0,1.0)" ontouchend="stopMove()">◀</button>
+                            <button class="dpad-btn dpad-center" id="btnStop" onclick="emergencyStop()">■</button>
+                            <button class="dpad-btn dpad-right" id="btnRight" onmousedown="startMove(0,-1.0)" onmouseup="stopMove()" ontouchstart="startMove(0,-1.0)" ontouchend="stopMove()">▶</button>
+                            <button class="dpad-btn dpad-down" id="btnBack" onmousedown="startMove(-0.3,0)" onmouseup="stopMove()" ontouchstart="startMove(-0.3,0)" ontouchend="stopMove()">▼</button>
+                        </div>
+                        <p class="dpad-hint">Hold to drive · Release to stop</p>
+                    </div>
+
+                    <div class="speed-controls">
+                        <div class="speed-slider-group">
+                            <label class="slider-label">MAX SPEED <span id="maxSpeedVal">0.5</span> m/s</label>
+                            <input type="range" id="maxSpeedSlider" min="0.1" max="1.5" step="0.1" value="0.5" class="speed-slider" oninput="updateMaxSpeed(this.value)">
+                        </div>
+                        <div class="speed-slider-group">
+                            <label class="slider-label">TURN RATE <span id="maxTurnVal">1.0</span> rad/s</label>
+                            <input type="range" id="maxTurnSlider" min="0.1" max="3.0" step="0.1" value="1.0" class="speed-slider" oninput="updateMaxTurn(this.value)">
+                        </div>
+
+                        <div class="gait-buttons">
+                            <button class="gait-btn" onclick="setGait('trot')" id="btnTrot">TROT</button>
+                            <button class="gait-btn active" onclick="setGait('walk')" id="btnWalk">WALK</button>
+                            <button class="gait-btn" onclick="setGait('bound')" id="btnBound">BOUND</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Keyboard hint -->
+                <div class="keyboard-hint">
+                    <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> — Drive &nbsp;|&nbsp;
+                    <span class="kbd">SPACE</span> — Emergency Stop &nbsp;|&nbsp;
+                    <span class="kbd">Q</span><span class="kbd">E</span> — Turn
+                </div>
+            </section>
+
+            <!-- CAMERA & GESTURES -->
+            <section class="camera-section card">
+                <div class="card-header" style="margin-bottom:10px;">
+                    <h2 class="card-title" style="margin:0;">OPTICS <span class="log-live" style="float:right">● LIVE</span></h2>
+                </div>
+                
+                <div class="camera-box">
+                    <img id="camFeed" src="http://localhost:8080/stream?topic=/camera/image_raw&type=ros_compressed" alt="NO SIGNAL." onerror="this.src=''; this.alt='Waiting for Camera...'">
+                </div>
+                <div class="gesture-grid">
+                    <button class="gait-btn" onclick="stand()">🧍 STAND</button>
+                    <button class="gait-btn" onclick="sit()">🐕 SIT</button>
+                    <button class="gait-btn" onclick="bow()">🙇 BOW</button>
+                    <button class="gait-btn active" style="grid-column: 1 / -1; border-color: var(--red); color: var(--yellow);" onclick="heartGesture()">💖 HEART DANCE</button>
+                </div>
+            </section>
+
+            <!-- SENSOR PANEL -->
+            <section class="sensor-section card">
+                <h2 class="card-title">SENSORS</h2>
+                <div class="sensor-grid">
+                    <div class="sensor-item">
+                        <div class="sensor-icon">🔊</div>
+                        <div class="sensor-name">LIDAR</div>
+                        <div class="sensor-status ok" id="lidarStatus">ACTIVE</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="sensor-icon">📡</div>
+                        <div class="sensor-name">IMU</div>
+                        <div class="sensor-status ok" id="imuStatus">ACTIVE</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="sensor-icon">📷</div>
+                        <div class="sensor-name">CAMERA</div>
+                        <div class="sensor-status warn" id="camStatus">STANDBY</div>
+                    </div>
+                    <div class="sensor-item">
+                        <div class="sensor-icon">🦿</div>
+                        <div class="sensor-name">JOINTS</div>
+                        <div class="sensor-status ok" id="jointStatus">ACTIVE</div>
+                    </div>
+                </div>
+
+                <div class="imu-display">
+                    <h3 class="sub-title">IMU ORIENTATION</h3>
+                    <div class="imu-bars">
+                        <div class="imu-bar-item">
+                            <span>ROLL</span>
+                            <div class="imu-bar-track"><div class="imu-bar-fill" id="rollBar" style="left:50%"></div></div>
+                            <span id="rollVal">0.0°</span>
+                        </div>
+                        <div class="imu-bar-item">
+                            <span>PITCH</span>
+                            <div class="imu-bar-track"><div class="imu-bar-fill" id="pitchBar" style="left:50%"></div></div>
+                            <span id="pitchVal">0.0°</span>
+                        </div>
+                        <div class="imu-bar-item">
+                            <span>YAW</span>
+                            <div class="imu-bar-track"><div class="imu-bar-fill" id="yawBar" style="left:50%"></div></div>
+                            <span id="yawVal">0.0°</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TACTICAL RADAR -->
+            <section class="radar-section card">
+                <h2 class="card-title">TACTICAL RADAR <span class="log-live" style="float:right">● LIVE</span></h2>
+                <div class="camera-box" id="mapContainer" style="height: 250px; background: #001a1a;">
+                    <div id="mapFeed" style="width: 100%; height: 100%;"></div>
+                </div>
+                <div style="text-align:center; font-family:'Orbitron', monospace; font-size:0.7em; color:var(--cyan); margin-top:5px;">
+                    CLICK MAP TO SEND AUTONOMOUS WAYPOINT
+                </div>
+            </section>
+
+            <!-- JOINT STATES -->
+            <section class="joint-section card">
+                <h2 class="card-title">LEG POSITIONS (rad)</h2>
+                <div class="leg-grid">
+                    <div class="leg-card">
+                        <h3 class="leg-title leg-fr">FRONT RIGHT</h3>
+                        <div class="joint-row"><span>Hip</span><span id="fr_hip">0.00</span></div>
+                        <div class="joint-row"><span>Thigh</span><span id="fr_thigh">0.00</span></div>
+                        <div class="joint-row"><span>Calf</span><span id="fr_calf">0.00</span></div>
+                    </div>
+                    <div class="leg-card">
+                        <h3 class="leg-title leg-fl">FRONT LEFT</h3>
+                        <div class="joint-row"><span>Hip</span><span id="fl_hip">0.00</span></div>
+                        <div class="joint-row"><span>Thigh</span><span id="fl_thigh">0.00</span></div>
+                        <div class="joint-row"><span>Calf</span><span id="fl_calf">0.00</span></div>
+                    </div>
+                    <div class="leg-card">
+                        <h3 class="leg-title leg-rr">REAR RIGHT</h3>
+                        <div class="joint-row"><span>Hip</span><span id="rr_hip">0.00</span></div>
+                        <div class="joint-row"><span>Thigh</span><span id="rr_thigh">0.00</span></div>
+                        <div class="joint-row"><span>Calf</span><span id="rr_calf">0.00</span></div>
+                    </div>
+                    <div class="leg-card">
+                        <h3 class="leg-title leg-rl">REAR LEFT</h3>
+                        <div class="joint-row"><span>Hip</span><span id="rl_hip">0.00</span></div>
+                        <div class="joint-row"><span>Thigh</span><span id="rl_thigh">0.00</span></div>
+                        <div class="joint-row"><span>Calf</span><span id="rl_calf">0.00</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ROS LOG -->
+            <section class="log-section card">
+                <h2 class="card-title">ROS LOG <span class="log-live">● LIVE</span></h2>
+                <div class="log-box" id="logBox">
+                    <div class="log-entry log-info">System initializing...</div>
+                </div>
+                <button class="clear-btn" onclick="clearLog()">CLEAR LOG</button>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <span>HERMES v2.0 ⚡ Ka-Chow!</span>
+            <span>ROS2 Humble · CHAMP Controller</span>
+            <span id="msgCount">MSGS: 0</span>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

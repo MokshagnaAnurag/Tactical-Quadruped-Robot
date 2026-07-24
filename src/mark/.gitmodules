@@ -1,0 +1,4 @@
+[submodule "mark/include/mark"]
+	path = mark/include/mark
+	url = https://github.com/chvmp/libmark
+	branch = master
